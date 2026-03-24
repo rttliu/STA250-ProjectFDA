@@ -1,0 +1,413 @@
+\documentclass{article}
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{subfigure}
+\usepackage{booktabs}
+\usepackage{threeparttable}
+\usepackage{dblfloatfix}
+\usepackage{placeins}
+\usepackage{tabularx} 
+\usepackage{hyperref}
+\newcommand{\theHalgorithm}{\arabic{algorithm}}
+\usepackage[accepted]{icml2025}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{mathtools}
+\usepackage{amsthm}
+\usepackage[capitalize,noabbrev]{cleveref}
+\usepackage[textsize=tiny]{todonotes}
+
+\icmltitlerunning{Functional Representation and Regression of Typhoon Evolution in Western North Pacific Area}
+
+\begin{document}
+\twocolumn[
+\icmltitle{Functional Representation and Regression of Typhoon Evolution \\
+in Western North Pacific Area}
+
+\begin{icmlauthorlist}
+\icmlauthor{Ruitian Liu}{yyy}
+\end{icmlauthorlist}
+
+\icmlaffiliation{yyy}{Department of Statistics, University of California, Davis, United States}
+\icmlcorrespondingauthor{Ruitian Liu}{rttliu@ucdavis.edu}
+\icmlkeywords{Typhoon, Functional regression}
+\vskip 0.3in
+]
+
+\begin{abstract}
+This study develops a functional data analysis framework to investigate typhoon intensity trajectories using 1,101 storms. By constructing a one-dimensional intensity index from wind speed and central pressure, each storm is represented as a smooth intensity curve over its normalized lifetime. Functional Principal Component Analysis (FPCA) reveals that over 90\% of the trajectory variance can be explained by three dominant modes: overall intensity magnitude, timing shift of the intensity peak, and high-frequency oscillation. Function-on-scalar regression further demonstrates that climatic and geographic factors systematically shift these patterns; for instance, storms originating farther east and south tend to maintain higher overall intensity, while season strongly dictates the timing of the peak. Finally, concurrent functional regression uncovers a highly time-dependent spatial-intensity relationship. During the mid-life development stage, northward displacement is associated with storm intensification, whereas in later stages both eastward and northward displacement are associated with weaker intensity.
+\end{abstract}
+
+
+\section{Introduction}
+\subsection{Physics-based approaches versus statistical models}
+
+In tropical cyclone research, physics-based approaches mainly include numerical weather prediction models, coupled atmosphere–ocean models, and idealized dynamical experiments. These methods simulate storm evolution by solving atmospheric equations and representing key physical processes. They are widely used to study storm track, intensity, and structural change \cite{NOAAHAFS}. Their main advantage is that they are more closely linked to physical mechanisms. However, they are computationally expensive, sensitive to initialization and model setup, and less suited to extracting simple and comparable life-cycle patterns from large historical best-track datasets \cite{Zhang2023Review}.
+
+By contrast, statistical models in tropical cyclone research work directly from observational data. They describe relationships among variables through probability distributions, mean, variance, and correlation structure. Their main strength is that they can summarize large datasets efficiently and reveal stable empirical patterns. More generally, statistical models are useful for extracting dominant patterns from observations, assessing associations among variables, and describing how these relationships vary over time or across different storm conditions.
+
+\subsection{Statistical Modeling: $\mathbb{R}^p$ versus $L^2$}
+
+In many statistical studies of tropical cyclones, each storm is represented as a finite-dimensional vector in $\mathbb{R}^p$ using scalar summaries or discrete predictors. Under this framework, linear regression has been used for intensity prediction, logistic regression and discriminant analysis for rapid intensification forecasting, and Poisson-type models for seasonal cyclone counts and genesis activity \cite{Lee2015MLR,Knaff2017Eye,Lu2010Taiwan,Tippett2011Poisson}. While effective for scalar outcomes, these methods do not naturally preserve the full life-cycle shape of storm evolution. By contrast, the $L^2$ viewpoint treats each storm as a function-valued observation and allows inference on the entire trajectory.
+
+Existing $L^2$-based studies on tropical cyclones remain limited and have mostly focused on tracking and predicting. For example, ~\cite{Yang2021MFPCA} used multivariate FPCA for full-track simulation, ~\cite{Rekabdarkolaee2019Bayesian} jointly modeled latitude, longitude, and wind speed through a Bayesian multivariate functional model, and ~\cite{Kim2025FDAPath} applied functional regression to typhoon path prediction. By contrast, our focus is on typhoon intensity trajectories themselves. We study their dominant modes of variation, their associations with storm-level predictors, and the time-varying spatial--intensity relationship over the storm life cycle.
+
+\subsection{Assumptions}
+
+The proposed framework relies on several working assumptions. 
+First, typhoon intensity trajectories are treated as realizations from a common stochastic process, so that a population-level mean structure and covariance function can be estimated across storms. 
+Second, intensity evolution is assumed to vary smoothly over normalized storm time, which supports a functional representation of each trajectory. 
+Third, the dominant modes of variation, summarized by functional principal component scores, are assumed to be approximately linearly related to storm-level predictors. 
+Fourth, in the concurrent model, intensity at time $t$ is assumed to depend only on the storm location observed at the same time, without lagged spatial effects. 
+Fifth, the estimated relationships are interpreted as conditional associations rather than causal effects. 
+Finally, the model is intended as a statistical abstraction and does not explicitly represent all physical drivers of typhoon evolution, such as landfall interactions and Coriolis forcing.
+
+\subsection{Paper organization.}
+The rest of this paper is organized as follows. Section~\ref{sec:datapreparation} describes the data preprocessing procedure, including variable construction, trajectory smoothing, and outlier removal. Section~\ref{sec:fpca} introduces the FPCA framework and summarizes the dominant modes of variation in typhoon intensity trajectories. Section~\ref{sec:fosr} studies how these modes are associated with storm-level climatic and geographic predictors through score regression. Section~\ref{sec:concurrent} then examines the time-varying spatial--intensity relationship using concurrent functional regression.
+
+\subsection{Questions of interest}
+\label{sec:questionofinterests}
+(1) What are the dominant modes of variation in the evolution of typhoon intensity?
+And whether the diversity in typhoon life cycles can be effectively characterized by a few components in functional form.
+
+(2) How do climatic and environmental factors shift these evolution patterns?
+We examine how storm-level predictors influence the shape of intensity curves. 
+
+(3) How does the spatial-intensity relationship evolve during the life cycle of a typhoon and how does the influence of eastward and northward displacement on intensity change as a storm progresses from intensification to decay?
+
+
+\section{Data Preparation}
+\label{sec:datapreparation}
+\subsection{Variables}
+Observation timestamps were first standardized to Coordinated Universal Time (UTC) to ensure temporal consistency across records. All time strings were converted to numeric values (seconds since the Unix epoch, 1970-01-01 UTC). For each typhoon $i$, time was re-centered at its first recorded observation and expressed in hours since formation: $t_{ij} = \frac{\mathrm{obs\_time}_{ij} - t_{i0}}{3600}$, where $t_{i0} = \min_j \mathrm{obs\_time}_{ij}$. To account for heterogeneous lifetimes across storms, we further rescaled time to the unit interval, $t_{ij}^{(\mathrm{scaled})}= \frac{t_{ij}}{\max_j t_{ij}}$, thereby defining a common functional domain $[0,1]$ for subsequent analysis. Motivated by the previous literature~\cite{ChavasKnaff2024Model, Agbley2009PCA}, wind speed and central pressure are two variables that can reflect the intensity of a storm; we apply principal component analysis (PCA) to quantify it as a one-dimensional predictor. Let $\mathbf{z}_{ij}=\left(\frac{\mathrm{wind}_{ij} - \bar{w}}{s_w}, \frac{\mathrm{pressure}_{ij} - \bar{p}}{s_p}\right)$, denote the standardized measurements. The first principal component score:  $y_{ij}= \mathbf{z}_{ij}^{\top}\mathbf{v}_1$ was retained as a one-dimensional intensity index. The first component explains $95.9\%$ of the total variance, indicating that wind speed and central pressure can reflect the intensity factor. $x^{\mathrm{lon}}_{ij}$ and $x^{\mathrm{lat}}_{ij}$ denote the eastward and northward displacements of storm $i$ at time $t_{ij}$ measured relative to its initial location. They are obtained by transforming the original longitude--latitude coordinates into a local East--North--Up (ENU) system~\cite{esa_navipedia_enu} and retaining the horizontal components after centering at the storm's starting point; details of this coordinate transformation are provided in the Appendix~\ref{sec:enu}.
+
+\subsection{B-Splines smoothing}
+For each typhoon $i=1,\dots,N$, we observe discrete measurements 
+$\{(t_{ij}, x^{\mathrm{lon}}_{ij}, x^{\mathrm{lat}}_{ij}, y_{ij})\}_{j=1}^{n_i}$. Each trajectory component (longitude, latitude, and intensity) is independently smoothed using penalized B-splines \cite{eilers1996flexible} and subsequently evaluated on a common uniform grid $\mathcal G=\{g_k\}_{k=1}^{101}$.  Let $X^{\mathrm{lon}},\, X^{\mathrm{lat}},\, Y \in \mathbb{R}^{N\times 101}$ denote the resulting functional data matrices, where $X^{\mathrm{lon}}_{ik}=\hat x^{\mathrm{lon}}_i(g_k)$, $X^{\mathrm{lat}}_{ik}=\hat x^{\mathrm{lat}}_i(g_k)$, and $Y_{ik}=\hat y_i(g_k)$. Details of the smoothing procedure are provided in Appendix~\ref{sec:p-spline}. The implementation procedure is illustrated in Figure~\ref{fig:smoothing}. 
+For each trajectory component, a penalized P-spline is fitted to the raw observations, and the resulting smooth curves are evaluated on the regularized grid $\mathcal G$ shown as red points.
+
+\subsection{Outlier Removal Procedure.}
+Typhoon trajectories were screened in two stages; visualizations of the outlier detection procedure are in Figure~\ref{outlierdetection}.
+
+First, basic quality filters were applied by restricting the sample to years after 1949, removing observations with central pressure below 800 hPa. Storms exhibiting insufficient spatial displacement or irregular terminal behavior were excluded from the analysis. Specifically, trajectories were discarded if the final longitude exceeded $180^\circ$ (indicating extrapolation artifacts), if the Euclidean distance between initial and final locations was negligible, if the total lifetime was less than 80 hours, or if the number of recorded time points satisfied $n_i < 30$. Such trajectories are overly sparse, thereby violating the dense sampling assumption required for stable P-spline smoothing and leading to unstable basis estimation.
+
+Second, functional outlier detection was performed using elastic depth \cite{harris2018elastic} in the square-root velocity framework. For each trajectory $f_i$, amplitude and phase depths were computed from the pairwise elastic distances in $\mathbb{R}^2$ after temporal normalization to $[0,1]$. Trajectories classified as outliers under either amplitude or phase criteria (based on the elastic depth boxplot rule with tuning parameter $k_a=2$ and threshold $0.8$) were flagged. Any storm satisfying $\text{amp\_outlier}_i = 1$ or $\text{phs\_outlier}_i = 1$ was removed from subsequent functional analysis. The remaining trajectories constitute the cleaned dataset used for downstream modeling and inference. The specific notation of identifying outliers by the elastic depth approach is described in Appendix~\ref{sec:outlier}.
+
+\section{FPCA procedures}
+\label{sec:fpca}
+After preprocessing, each storm intensity trajectory was represented as a smooth function on the common domain $\mathcal{T}=[0,1]$, and 42 trajectories were identified and removed as described above, leaving 952 storm units, which are the focus of the study.
+
+\subsection{Motivations}
+To address the question proposed in~\ref{sec:questionofinterests}: whether the diversity of typhoon life cycles can be explained by a small number of dominant functional patterns. We apply functional principal component analysis (FPCA) to the smoothed intensity curves. FPCA provides a principled dimension-reduction framework for functional data by decomposing the observed trajectory variation into orthogonal modes around the population mean function. This allows the major patterns of intensity evolution across storms to be summarized by a few interpretable functional patterns. Given the mean function $\mu(t)=\mathbb{E}\{Y_i(t)\}$ and covariance function $G(s,t)=\mathrm{Cov}\{Y_i(s),Y_i(t)\}$.
+
+FPCA provides an orthogonal decomposition of the stochastic process through the Karhunen--Lo\`eve expansion \cite{karhunen1947, loeve1946, ramsay2005}, the intensity trajectory $Y_i(t)$ admits the truncated representation
+\begin{align}
+Y_i^{(K)}(t) \approx \mu(t)+\sum_{k=1}^{K}\xi_{ik}\,\phi_k(t), 
+\end{align}
+where $t \in \mathcal{T}=[0,1]$, and $i=1,\dots,n$ $\mu(t)=\mathbb{E}\{Y_i(t)\}$ is the mean function, $\{\phi_k(t)\}$ are orthonormal eigenfunctions of the covariance operator, and $\xi_{ik}$ are the associated functional principal component (FPC) scores satisfying $\mathrm{Var}(\xi_{ik})=\lambda_k$ with $\lambda_k$ denoting the $k$-th eigenvalue. The truncation level $K$ is chosen as the smallest integer such that the cumulative proportion of variance explained (CPVE), $\mathrm{CPVE}(K) = \frac{\sum_{k=1}^{K}\lambda_k} {\sum_{k=1}^{\infty}\lambda_k}$ exceeds $90\%$.  We present four diagnostic plots to motivate the use of FPCA for the typhoon intensity trajectories. 
+
+\subsection{Brief summary of FPCA}
+
+\FloatBarrier
+\begin{figure*}[!h]
+\vskip 0.2in
+\centering
+\includegraphics[width=0.8\textwidth]{fpcalike.pdf}
+\caption{Summary of the Functional Principal Component Analysis (FPCA) results. The upper-left panel shows the observed functional trajectories (gray) together with the estimated mean function (red). The upper-right panel presents the estimated covariance surface $\hat{G}(s,t) $. The lower-left panel displays the scree plot and cumulative proportion of variance explained (CPVE) for the first eight components. The lower-right panel illustrates curve reconstruction using three components
+}
+\label{fpca}
+\vskip -0.2in
+\end{figure*}
+
+The observed curves with the mean function summarize the overall trajectory shape and the extent of heterogeneity across storms. The estimated covariance surface shows how intensity values co-vary over normalized storm time. The scree plot and cumulative proportion of variance explained are used to assess whether a small number of principal components capture most of the variation. The reconstruction plot then shows whether the approximation can adequately recover the main shape characteristics of individual trajectories. Taken together, these plots explain both why FPCA is suitable here and why a truncated representation is sufficient in practice.
+
+Figure~\ref{fpca} provides several pieces of evidence supporting the use of FPCA for the typhoon intensity trajectories. The upper-right panel further indicates a smooth covariance surface with strong positive dependence concentrated near the diagonal, suggesting that intensity values at nearby life stages are highly correlated. The scree plot and CPVE curve in the lower-left panel show that the first three principal components already explain more than 90\% of the total variation, indicating that a parsimonious truncated representation is adequate. This is also confirmed by the lower-right panel, where reconstructions based on $K=3$ components closely recover the main shape of the observed curves. Together, these plots suggest that the major diversity of typhoon intensity evolution can be summarized by a small number of dominant functional modes.
+
+As different typhoon timing and sharpness of peak development from the upper-left panel, a further question is whether the remaining variation is primarily amplitude variation or whether substantial phase misalignment is still present. If timing shifts were dominant, the FPCA scores would often exhibit a nonlinear manifold structure, because in this case temporally misaligned curves are not well summarized by a few linear directions in $L^2$. Nevertheless, Figure~\ref{pc} does not show clear nonlinear manifold structure in the principal component scores. This suggests that the dominant variability can be adequately represented within the FPCA framework, without introducing an time-warping step.
+
+\subsection{Behavior of eigenfunctions and FPC scores}
+Also, if we want to identify the main structural patterns that govern the evolution of typhoon intensity, we need to obtain the leading eigenfunctions and their associated FPC scores. The eigenfunctions describe the dominant directions along which intensity trajectories vary around the mean curve, while the score perturbations show how movement along each component changes the trajectory shape in practice. Taken together, they allow us to interpret whether these differences drive the major variation across storms.
+
+\FloatBarrier
+\begin{figure*}[!t]
+\vskip 0.2in
+\centering
+\includegraphics[width=0.75\textwidth]{eigen.pdf}
+\caption{FPCA results for the standardized storm intensity trajectories. The eigenfunction panels show the first three estimated eigenfunctions $\hat{\phi}_k(t)$ with the corresponding fraction of variance explained (FVE). The ``trajectories on PC$_k$'' panels visualize the score-driven variation along each component: gray curves represent individual trajectories projected onto PC$_k$, and the red/blue curves highlight representative trajectories with large positive/negative scores.}
+\label{fig:eigen}
+\vskip -0.2in
+\end{figure*}
+
+To facilitate interpretation of the score--covariate associations in Table \ref{tab:pc_reg}, Figure~\ref{fig:eigen} illustrates how variation along the leading FPCA components manifests in the intensity trajectories---capturing changes in overall level. In each trajectory panel, the red curve represents a larger positive score, while the blue curve represents a smaller or negative score on the corresponding component.
+
+The first eigenfunction $\phi_1(t)$ reflects overall intensity level. Because its eigenfunction is positive over nearly the entire lifetime, a higher ${\xi}_1$ shifts the trajectory upward almost uniformly across time. Thus, storms with larger ${\xi}_1$ tend to remain stronger throughout their lifetime. The second eigenfunction $\phi_2(t)$ reflects a timing shift in intensity evolution. Since its eigenfunction changes sign over time, a higher ${\xi}_2$ indicates that the typhoon has an earlier peak, and vice versa. The third eigenfunction $\phi_3(t)$ represents higher-frequency shape variation. Its eigenfunction alternates sign multiple times, implying localized rises and falls around the dominant trajectory pattern. Hence, PC3 reflects more oscillatory or irregular behavior in intensity evolution, and a higher ${\xi}_3$ indicates that the specific storm's curve exhibits fewer oscillations in typhoon.
+
+\section{Function-on-Scalar Regression}
+\label{sec:fosr}
+After the FPCA analysis, which provided an overall summary of the major ways in which typhoon intensity trajectories vary across storms, we are curious about whether these patterns can be systematically related to climatic and environmental predictors, as mentioned in~\ref{sec:questionofinterests}. This requires a regression framework that preserves the functional nature of the response while incorporating scalar predictors. This motivates the use of function-on-scalar regression, where the response is the entire intensity trajectory and the covariates are storm-level scalar variables. As a result, it becomes possible to examine not only whether a predictor is associated with typhoon intensity, but also how this association is distributed across the storm lifetime.
+
+Plugging in the FPCA eigenfunctions and fitted score regressions, if we want to regress the functional response $Y_i(t)$ on a vector of scalar predictors $x_i \in \mathbb{R}^p$, we obtain:
+\[
+\begin{aligned}
+\widehat{\mathbb{E}}\{Y_i^{(K)}(t)\mid x_i\}
+&= \widehat{\mathbb{E}}\!\left\{\mu(t)+\sum_{k=1}^{K}\xi_{ik}\phi_k(t)\,\middle|\,x_i\right\} \\
+&= \hat\mu(t) + \sum_{k=1}^{K}\widehat{\mathbb{E}}(\xi_{ik}\mid x_i)\,\hat\phi_k(t) \\
+&= \hat\mu(t) + \sum_{k=1}^{K}\bigl(\hat\alpha_k + x_i^\top \hat\beta_k\bigr)\hat\phi_k(t)
+\end{aligned}
+\]
+
+where we can denote this regression process as ${\mathbb{E}}(\xi_{ik}\mid x_i)$, and $\alpha_k$ is the intercept for the $k$-th principal component,  $\beta_k \in \mathbb{R}^p$ is the coefficient vector estimated by the least squares method. $\varepsilon_{ik} = \xi_{ik} - \hat\xi_{ik}$ is an error term following $\varepsilon_{ik} \sim N(0, \sigma^2)$, where $\sigma^2$ is a constant variance.
+
+
+\FloatBarrier
+\begin{table*}[!t]
+\caption{Linear regressions of FPCA scores on storm-level predictors.
+Continuous variables are standardized to mean zero and unit variance.
+Winter is the reference category for season. Inside the parenthesis is the standard error. Starting longitude and starting latitude denote the storm’s formation location; larger longitude or latitude values indicate a more easterly or northerly formation position.}
+\begin{small}
+\begin{sc}
+\label{tab:pc_reg}
+\begin{center}
+\vspace{0.15in}
+\begin{threeparttable}
+\begin{tabular}{lccc}
+\toprule
+ & Magnitude (${\xi}_1$) & Timing shift (${\xi}_2$) & Oscillation (${\xi}_3$) \\
+\midrule
+Spring            & -0.124 (0.146)        & -0.099 (0.098)        & 0.120$^{\cdot}$ (0.062) \\
+Summer            & -0.029 (0.125)        & -0.239$^{**}$ (0.084) & 0.088$^{\cdot}$ (0.053) \\
+Autumn            & 0.245$^{*}$ (0.122)   & -0.289$^{***}$ (0.082)& 0.065 (0.052) \\
+Year of formation & 0.254$^{***}$ (0.025) & -0.046$^{**}$ (0.017) & -0.138$^{***}$ (0.011) \\
+Starting longitude& 0.238$^{***}$ (0.026) & -0.037$^{*}$ (0.017)  & 0.039$^{***}$ (0.011) \\
+Starting latitude & -0.088$^{**}$ (0.027) & 0.081$^{***}$ (0.018) & -0.018 (0.012) \\
+Storm lifetime    & 0.109$^{***}$ (0.026) & 0.129$^{***}$ (0.018) & 0.006 (0.011) \\
+Intercept         & -0.082 (0.117)        & 0.240$^{**}$ (0.079)  & -0.075 (0.050) \\
+\midrule
+$R^2$             & 0.232                 & 0.096                 & 0.202 \\
+Adj.\ $R^2$       & 0.226                 & 0.089                 & 0.196 \\
+F-statistic       & 40.62$^{***}$         & 14.33$^{***}$         & 34.19$^{***}$ \\
+Residual SE       & 0.736                 & 0.494                 & 0.312 \\
+Observations      & 952                   & 952                   & 952 \\
+\bottomrule
+\end{tabular}
+\begin{tablenotes}
+\footnotesize
+\item $^{\cdot}p<0.10$, $^{*}p<0.05$, $^{**}p<0.01$, $^{***}p<0.001$.
+\end{tablenotes}
+\end{threeparttable}
+\end{center}
+\end{sc}
+\end{small}
+\end{table*}
+
+After fitting our model of ${\mathbb{E}}(\xi_{ik}\mid x_i)$, Figure~\ref{sensitivity} shows the diagnostics for $\varepsilon_{ik}$. We can see that no clear heteroscedastic pattern is observed. Although residual normality is broadly reasonable, the Q--Q plots indicate mild heavy-tailed behavior, suggesting that $t$-test $p$-values may be slightly anti-conservative. In this case, we could set a stricter significance level of 0.01. Table~\ref{tab:pc_reg} reports the estimated coefficient vectors $\hat\beta_k$, which reveal distinct associations between storm-level predictors and the three dominant modes of variation in intensity trajectories.
+
+For the first component, which reflects the overall intensity level across the storm lifetime, the main geographic signal comes from formation longitude and latitude. Storms forming farther east tend to follow a generally stronger intensity trajectory, while storms forming farther north tend to remain weaker overall. This is consistent with the idea that storms originating farther to the east and south usually have more favorable oceanic and environmental conditions for sustained strengthening, as well as a longer path over open water~\cite{zhan2017salient}. In addition, storms forming in more recent years, in autumn, and storms with longer lifetimes tend to display stronger intensity evolution throughout their life cycle.
+
+The second component mainly reflects the timing of intensification and weakening, so its interpretation is more closely related to when storms peak during their lifetime rather than how strong they are on average. Here, season is the dominant factor. Compared with winter storms, summer and especially autumn storms exhibit a clearly different developmental timing pattern, suggesting that the seasonal large-scale environment strongly shapes when typhoons intensify and decay. Starting latitude and storm lifetime are also relevant: storms forming farther north and storms lasting longer tend to follow a different temporal evolution pattern, indicating that both initial location and available development time matter for the pace of storm evolution.
+
+The third component captures shorter-scale fluctuations around the main intensity trajectory, which can be viewed as irregularity in how intensity rises and falls over the storm lifetime. This pattern is related mainly to formation year and starting longitude. Storms forming farther east show somewhat more pronounced within-life-cycle fluctuation, while the year effect suggests that these smaller-scale intensity variations also change over time. By contrast, season, starting latitude, and storm lifetime play only a limited role here.
+
+In terms of goodness of fit, the predictor set explains a moderate share of variation in the first and third components, but only a limited share in the second. This contrast suggests that the timing shift of the typhoon may depend more strongly on unmeasured environmental and dynamical conditions, or on factors that we did not account for.
+
+\section{Concurrent Functional Regression}
+\label{sec:concurrent}
+\FloatBarrier
+\begin{figure*}[!t]
+\vskip 0.2in
+\centering
+\includegraphics[width=0.75\textwidth]{concurrent.pdf}
+\caption{Estimated time-varying spatial effects from the concurrent functional regression model. The top panels show the coefficient functions for longitudinal and latitudinal displacement, $\beta_{\mathrm{lon}}(t)$ and $\beta_{\mathrm{lat}}(t)$, with dashed lines indicating pointwise 95\% bootstrap confidence bands. The bottom-left panel displays the coefficient trajectory $(\beta_{\mathrm{lon}}(t), \beta_{\mathrm{lat}}(t))$ in the two-dimensional effect space, with points colored by scaled lifetime (blue: early stage; red: late stage). The bottom-right panel shows the relative contribution $\frac{\beta_{\mathrm{lon}}^2(t)}{\beta_{\mathrm{lon}}^2(t) + \beta_{\mathrm{lat}}^2(t)}$, illustrating time-varying directional dominance.}
+\label{fig:concurrent}
+\vskip -0.2in
+\end{figure*}
+
+The FPCA and subsequent score regressions mainly address the first two questions of interest: they summarize the dominant global patterns of typhoon intensity evolution and examine how these patterns are associated with storm-level scalar predictors. However, these analyses are hard to answer our final question of interest in Section~\ref{sec:questionofinterests}, namely, how the spatial--intensity relationship evolves over the storm life cycle and how storm movement and intensity are associated at each moment. 
+
+To study this time-local relationship, we next consider a concurrent functional regression model, in which the intensity process is related to the eastward and northward displacement processes observed at the same time point. 
+
+A concurrent functional regression model relates the response at time $t$ to predictors observed at the same time $t$, and is therefore well suited for capturing time-local associations along a functional trajectory. It is commonly regarded as a functional extension of the varying-coefficient model, later developed in the functional data analysis literature~\cite{Senturk2010functional}.
+
+Here, the response at time $t$ is regressed on predictors observed at the same time point. Let $\hat Y_i(t)$, $\hat a_i(t)$, and $\hat b_i(t)$ denote the smoothed intensity, eastward displacement, and northward displacement trajectories, respectively. The model is
+\[
+\hat Y_i(t)=\alpha(t)+\beta_{\mathrm{lon}}(t)\hat a_i(t)+\beta_{\mathrm{lat}}(t)\hat b_i(t),
+\]
+where $\alpha(t)$ is the baseline mean intensity, and $\beta_{\mathrm{lon}}(t)$ and $\beta_{\mathrm{lat}}(t)$ describe how the effects of eastward and northward displacement vary smoothly over the storm life cycle. At each normalized time $t$, $\beta_{\mathrm{lon}}(t)$ indicates whether storms that have moved farther east from their initial location tend to be stronger or weaker, while $\beta_{\mathrm{lat}}(t)$ indicates whether storms that have moved farther north tend to be stronger or weaker. In this sense, the two coefficient functions describe how the effect of storm position within its evolving track changes over the life cycle, and whether the east--west or north--south displacement is more strongly related to intensity at different development stages.
+
+
+As shown in Figure~\ref{fig:concurrent}, we can observe that the spatial--intensity relationship is strongly time-dependent: eastward displacement shows a relatively stable negative association through the main development period, whereas the effect of northward displacement evolves from positive to negative as the storm approaches its later stage. The spatial effects are weak near the beginning and end of the normalized storm life cycle, while the main signal concentrates in the mid--late stage. 
+
+In particular, the longitudinal coefficient $\beta_{\mathrm{lon}}(t)$ is predominantly negative over approximately $t\approx 0.3$--$0.85$, with its strongest negative effect around mid-life. This indicates that, conditional on northward displacement, storms located farther east relative to their starting point tend to have lower contemporaneous intensity during most of the main development period.
+
+By contrast, the latitudinal coefficient $\beta_{\mathrm{lat}}(t)$ changes sign over time. It is positive during roughly the middle stage of the life cycle ($t\approx 0.2$--$0.6$), suggesting that storms displaced farther north tend to be stronger at that stage, but becomes negative in the later stage ($t\approx 0.65$--$0.9$), indicating that farther northward displacement is then associated with weaker intensity.
+
+The effect pair $(\beta_{\text{lon}}(t),\beta_{\text{lat}}(t))$ traces a curved, loop-like path, indicating that the spatial association between storm position and intensity changes in both direction and magnitude over the life cycle. Near formation, the path lies close to the origin, suggesting little systematic link between location and intensity. During the main development stage, the path moves into a region where northward displacement is associated with stronger storms, whereas eastward displacement is associated with weaker storms. This suggests that poleward movement may still accompany intensification in mid-life, while eastward progression is less conducive to maintaining peak intensity. In the later stage, the path shifts to a regime where both eastward and northward movement are associated with reduced intensity, consistent with the weakening that often occurs as storms recurve.
+
+The dominance panel shows which spatial direction is more closely tied to storm intensity at different stages of the life cycle. In the early stage, the north--south component becomes more important soon after formation. During most of the main development period, however, the east--west component dominates, suggesting that longitudinal movement is more strongly linked to intensity evolution in the middle part of the track. Near the end of the life cycle, the balance shifts again, indicating that the relative importance of northward versus eastward movement changes as storms weaken.
+
+\section{Conclusion}
+This paper develops a functional data analysis framework for studying typhoon evolution in the Western North Pacific from a trajectory perspective. We represent typhoon intensity as a functional process and study its variation at the whole-trajectory level. The FPCA results show that the major diversity of typhoon intensity evolution can be summarized by a small number of dominant modes. In particular, the first three components explain more than 90\% of the total variation and mainly reflect overall intensity magnitude, timing shift of peak development, and higher-frequency irregular fluctuation. The leading FPCA components show different levels of association with the observed storm-level predictors. Overall intensity magnitude and short-scale fluctuation are partly explained by formation location, season, year, and lifetime, whereas the timing-related component is captured less well by the current covariates. Finally, concurrent functional regression reveals that the spatial--intensity relationship is highly time-varying over the storm life cycle. Eastward displacement is associated with weaker contemporaneous intensity through much of the development stage, while the effect of northward displacement changes sign from positive in mid-life to negative in later stages.
+
+\section{Limitations \& Future directions}
+
+Several limitations of the present study should be noted. Firstly, since the functional trajectories are obtained through penalized B-spline smoothing of discrete observations, they should be viewed as smooth approximations to the underlying storm processes rather than exact representations. In particular, abrupt local changes or boundary behavior may be partially attenuated by the smoothing procedure. Secondly, the concurrent regression model assumes that intensity at time $t$ depends only on the storm displacement observed at the same time $t$. This may ignore possible lagged effects and more complex dynamic feedback between movement and intensity. Thirdly, the regression analyses are primarily associative rather than causal. The score regressions and concurrent functional regression describe statistical relationships between intensity evolution and the observed predictors, but they do not establish physical causation, especially given that the current models include only a limited set of covariates and omit potentially important environmental drivers such as the landfall effect and Coriolis forcing. Finally, A natural direction for future work is to incorporate time warping into the analysis of typhoon intensity trajectories. Since storm life cycles differ in intensity level and timing of intensification and decay (Figure~\ref{fpca}), time warping may provide a more refined representation.
+
+
+\section*{Software and Data}
+Typhoon track data were obtained from the International Best Track Archive for Climate Stewardship (IBTrACS), Version 4, provided by the NOAA National Centers for Environmental Information (NCEI), which can be accessed at~\url{https://www.ncei.noaa.gov/products/international-best-track-archive}. The dataset compiles best-track records from multiple meteorological agencies worldwide and provides storm position and intensity estimates. For each typhoon, variables include time-stamped longitude and latitude, wind speed, and central pressure as measures of intensity. All analyses were conducted in \texttt{R} (version 4.5.1).
+
+For packages, spatial transformation and mapping used \texttt{sf} \cite{Pebesma2018sf}, \texttt{lwgeom} \cite{Pebesma2026lwgeom}, and \texttt{rnaturalearth} \cite{Massicotte2026rnaturalearth}; B-spline smoothing relied on \texttt{splines} \cite{Hastie1992gam}; functional data analysis, including functional principal component analysis, was conducted using \texttt{fdapace} \cite{Zhou2024fdapace,Wang2016FDA}; elastic depth was implemented with \texttt{fdasrvf} \cite{Tucker2026fdasrvf,Tucker2013generative}; and concurrent functional regression was carried out using \texttt{fdaconcur} \cite{Iao2024fdaconcur,Senturk2010functional}.
+
+
+\bibliography{example_paper}
+\bibliographystyle{icml2025}
+
+\newpage
+\appendix
+\onecolumn
+\section*{Appendix}
+\addcontentsline{toc}{section}{Appendix}
+\section{Coordinate Transformation to the Local ENU System}
+\label{sec:enu}
+Typhoon trajectories are originally recorded by longitude--latitude pairs $(\lambda_{ij}, \phi_{ij})$, where $\lambda_{ij}$ and $\phi_{ij}$ denote, respectively, the longitude and latitude of typhoon $i$ at observation time $t_{ij}$. Since these locations lie on the spherical earth surface $S^2 \subset \mathbb{R}^3$, direct analysis in longitude--latitude coordinates is not ideal: a fixed change in longitude does not correspond to the same physical distance at different latitudes, and the longitude--latitude system does not provide a uniform Euclidean representation of movement. The coordinate system is nonlinear and statistical operations such as averaging, smoothing, or functional decomposition may be geometrically distorted. As a result, direct use of raw coordinate differences may distort both trajectory geometry and variation across storms. 
+
+Therefore, to obtain a representation that is locally linear and better suited for functional data analysis, we map each trajectory from the sphere to a two-dimensional tangent plane at its initial location~\cite{esa_navipedia_enu}.
+
+First, each longitude--latitude observation is embedded into $\mathbb{R}^3$ using the standard Earth-Centered Earth-Fixed (ECEF) transformation. Let $R$ denote the earth's radius. Then the Cartesian coordinates corresponding to $(\lambda_{ij}, \phi_{ij})$ are
+\[
+(A_{ij}, B_{ij}, C_{ij})
+=
+R\big(
+\cos\phi_{ij}\cos\lambda_{ij},\;
+\cos\phi_{ij}\sin\lambda_{ij},\;
+\sin\phi_{ij}
+\big).
+\]
+
+We then center the trajectory by subtracting this initial position, so that the displacement vector at time $t_{ij}$ is
+\[
+\Delta \mathbf{X}_{ij}
+=
+(A_{ij}, B_{ij}, C_{ij}) - (A_{i1}, B_{i1}, C_{i1}).
+\]
+This centering step removes absolute geographic location and expresses each storm relative to its own starting point.
+
+Second, the centered Cartesian displacement is projected onto the local tangent plane at the initial storm location. For this purpose, we construct the local East--North--Up (ENU) coordinate system determined by $(\lambda_{i1}, \phi_{i1})$. The corresponding rotation matrix is
+\[
+\mathbf{R}_i =
+\begin{pmatrix}
+-\sin\lambda_{i1} & \cos\lambda_{i1} & 0 \\
+-\sin\phi_{i1}\cos\lambda_{i1} &
+-\sin\phi_{i1}\sin\lambda_{i1} &
+\cos\phi_{i1} \\
+\cos\phi_{i1}\cos\lambda_{i1} &
+\cos\phi_{i1}\sin\lambda_{i1} &
+\sin\phi_{i1}
+\end{pmatrix}.
+\]
+Applying this matrix to $\Delta \mathbf{X}_{ij}$ gives the local ENU
+coordinates
+\[
+(E_{ij}, N_{ij}, U_{ij})
+=
+\mathbf{R}_i \, \Delta \mathbf{X}_{ij}.
+\]
+Here, $E_{ij}$ is the eastward displacement, $N_{ij}$ is the northward displacement, and $U_{ij}$ is the upward component relative to the tangent plane. The upward component $U_{ij}$ is not used in subsequent analysis, since the storm track is fundamentally a surface trajectory on the earth and our scientific interest lies in the horizontal evolution of storm movement. In this setting, $U_{ij}$ mainly reflects geometric deviation induced by the local projection rather than a meaningful vertical motion process. Thus, we retain only the east and north components and define $(a_{ij}, b_{ij}) = (E_{ij}, N_{ij})$ corresponding to a two-dimensional representation of the storm trajectory in local planar coordinates, measured in kilometers, with the first observation satisfying $(a_{i1}, b_{i1}) = (0,0)$.
+
+The rows of $\mathbf{R}_i$ have a natural geometric interpretation: they are the local unit vectors in the east, north, and up directions at the initial location of storm $i$. Specifically,
+\[
+\mathbf{e}_{E} = (-\sin\lambda_{i1},\; \cos\lambda_{i1},\; 0),
+\quad
+\mathbf{e}_{N} = (-\sin\phi_{i1}\cos\lambda_{i1},\; -\sin\phi_{i1}\sin\lambda_{i1},\; \cos\phi_{i1}),
+\]
+Therefore, multiplying by $\mathbf{R}_i$ expresses a global Cartesian displacement vector in this local orthonormal basis. The resulting ENU coordinates provide a local linearization of the spherical trajectory.
+
+This transformation is useful for several reasons. First, it removes the local curvature of the sphere and allows the trajectory to be analyzed in an approximately Euclidean space. Second, by centering each storm at its own initial position, it emphasizes relative movement patterns rather than absolute starting locations. Third, the transformed coordinates $(a_{ij}, b_{ij})$ are continuous horizontal displacement processes, which are well suited for smoothing, functional principal component analysis, and subsequent regression modeling. Finally, this approach avoids the scale distortion inherent in raw longitude--latitude coordinates.
+
+\section{Elastic Depth for Functional Outlier Detection.}
+\label{sec:outlier}
+
+Before conducting functional modeling, it is important to identify trajectories that are markedly atypical relative to the overall sample. In the typhoon setting, some storms may exhibit highly unusual movement patterns, such as abrupt directional changes, irregular looping behavior, or temporal misalignment relative to the majority of trajectories.
+
+A major difficulty is that trajectory variation typically arises from two distinct sources: amplitude variation, which reflects differences in geometric shape, and phase variation, which reflects differences in the timing or progression of movement along the trajectory. A distance measure based only on pointwise Euclidean comparison may confound these two sources of variation and therefore fail to distinguish genuine shape outliers from trajectories that are simply time-warped versions of more typical paths. To address this issue, we adopt elastic depth, which is designed for functional data under elastic shape analysis and provides a notion of trajectory centrality after accounting for both amplitude and phase variation.
+
+Elastic depth provides a notion of centrality for functional trajectories under elastic shape analysis. By jointly accounting for amplitude and phase variation, it helps detect atypical typhoon paths that deviate from the main geometric pattern of the sample~\cite{harris2018elastic}. Let $f_i:[0,1]\to\mathcal{M}$, $i=1,\dots,n$, denote the observed storm trajectories, where $\mathcal{M}=\mathbb{R}^2$ represents the longitude--latitude domain. Let $\Gamma$ denote the set of orientation-preserving diffeomorphisms on $[0,1]$, i.e., smooth strictly increasing warping functions $\gamma$ satisfying $\gamma(0)=0$ and $\gamma(1)=1$, which model phase (temporal) variability. Each trajectory $f$ is represented using the square-root velocity function (SRVF)~\cite{srivastava2011elastic}.
+\[
+q_f(t)=\frac{\dot f(t)}{\sqrt{\|\dot f(t)\|}}, \qquad t\in[0,1],
+\]
+where $\dot f(t)$ denotes the time derivative of $f$ and $\|\cdot\|$ is the Euclidean norm in $\mathbb{R}^2$. The amplitude (shape) distance between two trajectories $f$ and $g$ is defined as
+\[
+d_a(f,g)=\inf_{\gamma\in\Gamma}\|\,q_f-(q_g\circ\gamma)\sqrt{\dot\gamma}\,\|_{L^2},
+\]
+where $\|\cdot\|_{L^2}$ denotes the $L^2$ norm on $[0,1]$ and the optimization over $\gamma$ removes phase variability. Let $X$ denote a random trajectory drawn from the underlying population distribution $P$ on the functional space. The amplitude outlyingness of a trajectory $f$ with respect to $P$ is defined as
+\[
+O_a(f;P)=\inf\{t>0:\,P(d_a(f,X)\le t)\ge 1/2\},
+\]
+i.e., the median elastic distance from $f$ to the population. The corresponding amplitude elastic depth is
+\[
+D_a(f;P)=(1+O_a(f;P))^{-1},
+\]
+which maps outlyingness to the unit interval $(0,1]$, with larger values indicating greater centrality. In practice, given a sample $\{f_1,\dots,f_n\}$, the empirical outlyingness is computed as
+\[
+O_{a,n}(f_i)=\operatorname{median}\{d_a(f_i,f_j):\,j=1,\dots,n\},
+\]
+and the empirical depth is $D_{a,n}(f_i)=(1+O_{a,n}(f_i))^{-1}$. Larger depth values indicate greater centrality in the functional sample, while smaller values indicate potentially outlying behavior. 
+
+To identify amplitude outliers, define the sample median depth $\tilde D_a = \operatorname{median}_{1\le i\le n} D_{a,n}(f_i)$, and define the interquartile-type spread measure $\mathrm{IQR}_a = \max_{1\le i\le n} D_{a,n}(f_i) - \tilde D_a$. Given a tuning constant $k_a>0$, the amplitude cutoff is defined as $c_a = \tilde D_a - k_a \cdot \mathrm{IQR}_a$. A trajectory $f_i$ is classified as an amplitude outlier if $D_{a,n}(f_i) < c_a$. Similarly, for phase depth, define $\tilde D_p = \operatorname{median}_{1\le i\le n} D_{p,n}(f_i)$, $\mathrm{IQR}_p = \max_{1\le i\le n} D_{p,n}(f_i) - \tilde D_p$, and $c_p = \tilde D_p - k_p \cdot \mathrm{IQR}_p$. A trajectory $f_i$ is classified as a phase outlier if $D_{p,n}(f_i) < c_p$. Define the binary indicator variables $\mathrm{amp\_outlier}_i= \mathbf{1}\{D_{a,n}(f_i) < c_a\}$, $\mathrm{phs\_outlier}_i =\mathbf{1}\{D_{p,n}(f_i) < c_p\}$. Finally, a trajectory is removed from the analysis if it exhibits abnormal behavior in either amplitude or phase: $\mathrm{any\_outlier}_i = \mathbf{1}\{\mathrm{amp\_outlier}_i = 1$, or $\mathrm{phs\_outlier}_i = 1\}$. All trajectories with $\mathrm{any\_outlier}_i = 1$ are excluded from subsequent functional modeling. Outlier typhoon detected by elastic depth are shown at the lower panels in Figure~\ref{outlierdetection}
+
+\begin{figure}[H]
+\begin{center}
+\includegraphics[width=1\textwidth]{outlier.pdf}
+\caption{Visual screening and statistical detection of outlying typhoon trajectories. The upper-left panel highlights visually unusual track endpoints (which are obvious extrapolation points), and the upper-right panel shows their full trajectories. Lower panels display typhoons detected by the Elastic Depth method. The lower-left panel presents the amplitude--phase representation from elastic functional decomposition, where outliers are identified using elastic depth (low-depth trajectories highlighted). The lower-right panel maps the detected outliers back to geographic space. These trajectories exhibit atypical geometric or temporal patterns and are excluded from subsequent analysis.}
+\label{outlierdetection}
+\end{center}
+\vskip -0.2in
+\end{figure}
+
+\section{Spline for smoothing typhoon intensity trajectory}
+\label{sec:p-spline}
+Suppose for each typhoon $i = 1, \dots, N$, we observe $\{(t_{ij}, x^{\mathrm{lon}}_{ij}, x^{\mathrm{lat}}_{ij}, y_{ij})\}_{j=1}^{n_i}$, where $t_{ij} \in [0,1]$ denotes the scaled lifetime. For each trajectory component $z_{ij} \in \{x^{\mathrm{lon}}_{ij}, x^{\mathrm{lat}}_{ij}, y_{ij}\}$, we approximate the underlying smooth function $z_i(t)$ using a penalized B-spline (P-spline) expansion \cite{eilers1996flexible}:
+\[
+z_i(t) = \sum_{\ell=1}^{L} \beta_{i\ell} B_\ell(t),
+\]
+where $\{B_\ell(t)\}_{\ell=1}^L$ are B-spline basis functions~\cite{de1972calculating} defined on $[0,1]$, and $\beta_{i\ell}$ are the corresponding coefficients.
+
+The coefficients are estimated by minimizing the penalized least squares criterion
+\[
+\sum_{j=1}^{n_i}  \bigl(z_{ij} - z_i(t_{ij})\bigr)^2  + \lambda \sum_{\ell=3}^{L}  (\Delta^2 \beta_{i\ell})^2,
+\]
+where $\Delta^2$ denotes the second-order difference operator and $\lambda$ is the smoothing parameter. Here we set the number of basis functions $L$ to $18$ in order to obtain better fitting results and set $\lambda = 0.001$.
+
+For each typhoon $i$, let $\hat{\mathbf{z}}_i(t)=\big(\hat{x}^{\mathrm{lon}}_i(t),\hat{x}^{\mathrm{lat}}_i(t),\hat{y}_i(t)\big)^\top\in \mathbb{R}^3$ denote the fitted smooth vector-valued trajectory. Evaluating $\hat{\mathbf{z}}_i(t)$ on the common grid $\mathcal{G}=\{g_k\}_{k=1}^m$ yields the discretized matrix $\hat{Z}_i=\big(\hat{\mathbf{z}}_i(g_1),\hat{\mathbf{z}}_i(g_2),\dots,\hat{\mathbf{z}}_i(g_m)\big)\in \mathbb{R}^{3\times m}$. Stacking all typhoons produces the multivariate functional data array $\mathcal{Z}=\{\hat{Z}_i\}_{i=1}^N$, where each $\hat{Z}_i$ contains the longitudinal displacement, latitudinal displacement, and intensity evaluated on the common grid.
+
+\begin{figure}[H]
+\begin{center}
+\includegraphics[width=0.77\textwidth]{smoothing.pdf}
+\caption{Figure X displays raw observations (black points) and their corresponding smoothed functional reconstructions (blue curves) for four representative typhoons across longitude, latitude, and intensity. All trajectories are aligned on a common scaled lifetime domain $t$ $\in$ $[0,1]$.
+}
+\label{fig:smoothing}
+\end{center}
+\vskip -0.2in
+\end{figure}
+
+\section{Diagnostic Scatterplots of the First Three FPCA Scores}
+\begin{figure}[H]
+\begin{center}
+\includegraphics[width=0.77\textwidth]{pc123.pdf}
+\caption{Pairwise scatterplots of the first three FPCA scores (PC1--PC3), with dashed lines indicating zero. The score clouds show no evident nonlinear manifold structure or distinct clustering, supporting the adequacy of a low-dimensional linear FPCA representation for summarizing the intensity trajectories.
+}
+\label{pc}
+\end{center}
+\vskip -0.2in
+\end{figure}
+
+\section{Residual Diagnositic for Function-on-Scalar regression}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\textwidth]{residuals.pdf}
+\caption{Residual diagnostics for the regression models of the first three FPCA scores. Residuals are defined as $\varepsilon_{ik} = \xi_{ik} - \hat{\xi}{ik}$, where $\xi{ik}$ is the observed score and $\hat{\xi}_{ik}$ is the fitted score from the regression model.}
+\label{sensitivity}
+\vskip -0.2in
+\end{figure}
+
+\end{document}
